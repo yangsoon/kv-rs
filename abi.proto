@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package abi;
+
+// 来自客户端的命令请求
+message CommandRequest {
+    oneof request_data {
+        Hget hget = 1;
+        Hmget hmget = 2;
+        Hset hset = 3;
+        Hmset hmset = 4;
+        Hdel hdel = 5;
+        Hmdel hmdel = 6;
+        Hexit hexit = 7;
+        Hmexit hmexit = 8;
+        Hgetall hgetall = 9;
+    }
+}
+
+// 服务器的响应
+message CommandResponse {
+    // 状态码；复用 HTTP 2xx/4xx/5xx 状态码
+    uint32 status = 1;
+    // 如果不是 2xx, message里包含详细信息
+    string message = 2;
+    // 成功返回的values
+    repeated Value values = 3;
+    // 成功返回的Kvpairs
+    repeated Kvpair pairs = 4;
+}
+
+// 从 table 取一个 key，返回 value
+message Hget {
+    string table = 1;
+    string key = 2;
+}
+
+// 从 table 中获取所有的 Kvpair
+message Hgetall {
+    string table = 1;
+}
+
+// 从 table 中获取一组 keys 返回它们的值
+message Hmget {
+    string table = 1;
+    repeated string keys = 2;
+}
+
+// 往table里面存储一个kvpair
+// 如果 table 不存在就创建这个table
+message Hset {
+    string table = 1;
+    Kvpair pair = 2;
+}
+
+// 往table里面存储多个pairs
+message Hmset {
+    string table = 1;
+    repeated Kvpair pairs = 2;
+}
+
+// 从table里删除一个值，返回它之前的值
+message Hdel {
+    string table = 1;
+    string key = 2;
+}
+
+// 从table里删除多个值，返回它们之前的值
+message Hmdel {
+    string table = 1;
+    repeated string key = 2;
+}
+
+// 查看key是否存在
+message Hexit {
+    string table = 1;
+    string key = 2;
+}
+
+// 查看一组key是否存在
+message Hmexit {
+    string table = 1;
+    repeated string keys = 2;
+}
+
+// 返回值
+message Value {
+    oneof value {
+        string string = 1;
+        bytes binary = 2;
+        int64 integer = 3;
+        double float = 4;
+        bool bool = 5;
+    }
+}
+
+message Kvpair {
+    string key = 1;
+    Value value = 2;
+}

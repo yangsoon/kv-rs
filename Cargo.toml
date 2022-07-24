@@ -1,0 +1,28 @@
+[package]
+name = "kv-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "1" # 高效处理网络buffer的库
+prost = "0.9" # 处理protobuf的代码
+tracing = "0.1" # 日志处理
+thiserror = "1"
+dashmap = "4" # 并发 HashMap
+http = "0.2" # 我们使用 HTTP status code 所以引入这个类型库
+sled = "0.34" # sled db
+flate2 = "1" # gzip 压缩
+tokio = {version = "1", features = ["full"]}
+
+[dev-dependencies]
+anyhow = "1" # 错误处理
+async-prost = "0.3" # 支持把protobuf封装成tcp
+futures = "0.3" 
+tokio = {version = "1", features = ["full"]}
+tracing-subscriber = "0.3"
+tokio-util = { version = "0.6", features = ["codec"]}
+
+[build-dependencies]
+prost-build = "0.9"
