@@ -22,6 +22,7 @@ impl<Arg> Notify<Arg> for Vec<fn(&Arg)> {
 }
 
 impl<Arg> NotifyMut<Arg> for Vec<fn(&mut Arg)> {
+    #[inline]
     fn notify(&self, arg: &mut Arg) {
         for f in self {
             f(arg)

@@ -1,19 +1,21 @@
 mod frame;
-use bytes::BytesMut;
+mod stream;
+
 pub use frame::{read_frame, FrameCoder};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use futures::{SinkExt, StreamExt};
+pub use stream::ProstStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tracing::info;
 
 use crate::{CommandRequest, CommandResponse, KvError, Service};
-
 pub struct ProstServerStream<S> {
-    inner: S,
+    inner: ProstStream<S, CommandRequest, CommandResponse>,
     service: Service,
 }
 
 /// 处理客户端 socket 的读写
 pub struct ProstClientStream<S> {
-    inner: S,
+    inner: ProstStream<S, CommandResponse, CommandRequest>,
 }
 
 impl<S> ProstServerStream<S>
@@ -22,32 +24,19 @@ where
 {
     pub fn new(stream: S, service: Service) -> Self {
         Self {
-            inner: stream,
-            service: service,
+            inner: ProstStream::new(stream),
+            service,
         }
     }
 
     pub async fn process(mut self) -> Result<(), KvError> {
-        while let Ok(cmd) = self.recv().await {
+        let stream = &mut self.inner;
+        while let Some(Ok(cmd)) = stream.next().await {
             info!("Got a new command: {:?}", cmd);
             let res = self.service.execute(cmd);
-            self.send(res).await?
+            stream.send(res).await.unwrap();
         }
-        Ok(())
-    }
-
-    pub async fn recv(&mut self) -> Result<CommandRequest, KvError> {
-        let mut buf = BytesMut::new();
-        let stream = &mut self.inner;
-        read_frame(stream, &mut buf).await?;
-        CommandRequest::decode_frame(&mut buf)
-    }
-
-    pub async fn send(&mut self, resp: CommandResponse) -> Result<(), KvError> {
-        let mut buf = BytesMut::new();
-        resp.encode_frame(&mut buf)?;
-        let encoded = buf.freeze();
-        self.inner.write_all(&encoded[..]).await?;
+        // info!("Client {:?} disconnected", self.addr);
         Ok(())
     }
 }
@@ -57,26 +46,18 @@ where
     S: AsyncRead + AsyncWrite + Unpin + Send,
 {
     pub fn new(stream: S) -> Self {
-        Self { inner: stream }
+        Self {
+            inner: ProstStream::new(stream),
+        }
     }
 
     pub async fn execute(&mut self, cmd: CommandRequest) -> Result<CommandResponse, KvError> {
-        self.send(cmd).await?;
-        Ok(self.recv().await?)
-    }
-
-    async fn send(&mut self, msg: CommandRequest) -> Result<(), KvError> {
-        let mut buf = BytesMut::new();
-        msg.encode_frame(&mut buf)?;
-        let encoded = buf.freeze();
-        self.inner.write_all(&encoded[..]).await?;
-        Ok(())
-    }
-
-    async fn recv(&mut self) -> Result<CommandResponse, KvError> {
-        let mut buf = BytesMut::new();
         let stream = &mut self.inner;
-        read_frame(stream, &mut buf).await?;
-        CommandResponse::decode_frame(&mut buf)
+        stream.send(cmd).await?;
+
+        match stream.next().await {
+            Some(v) => v,
+            None => Err(KvError::InternalError("Didn't get any response".into())),
+        }
     }
 }
